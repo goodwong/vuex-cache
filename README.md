@@ -1,6 +1,8 @@
 
 # Vuex 2 resource
 
+使用vuex的vue-resource
+
 > **注意：** 未完成
 
 
