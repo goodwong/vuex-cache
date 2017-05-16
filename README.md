@@ -171,7 +171,7 @@ npm install vuex-resource --save
 ```
 
 
-### 添加更多的`actions` `mutations` `getters`，登录
+### 添加更多的`actions` `mutations` `getters`
 ```js
   const module = builder('productions')
 
