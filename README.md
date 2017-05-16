@@ -77,32 +77,32 @@ npm install vuex-resource --save
 1. 加载列表
 
   ```js
-  this.$store.dispatch('production/LOAD')
+  this.$store.dispatch('production/LOAD').then(items => {})
   ```
 
 2. 查找（单个）
 
   ```js
-  this.$store.dispatch('production/FIND', { id })
+  this.$store.dispatch('production/FIND', { id }).then(item => {})
   ```
 
 3. 创建
 
   ```js
-  this.$store.dispatch('production/CREATE', { payload })
+  this.$store.dispatch('production/CREATE', { payload }).then(item => {})
   ```
 
 4. 更新
 
   ```js
   // （建议）payload 仅包含需要变更的部分
-  this.$store.dispatch('production/UPDATE', { id, payload })
+  this.$store.dispatch('production/UPDATE', { id, payload }).then(item => {})
   ```
 
 5. 删除
 
   ```js
-  this.$store.dispatch('production/CREATE', { id })
+  this.$store.dispatch('production/CREATE', { id }).then(() => {})
   ```
 
 6. 使用getters
@@ -166,6 +166,8 @@ npm install vuex-resource --save
   this.$store.dispatch('production/UPDATE', { parent: 3, id, payload, params: {shop_id: 3} })
 
   this.$store.dispatch('production/CREATE', { parent: 3, id, params: {shop_id: 3} })
+
+  this.$store.getters['production/list'](3)
 ```
 
 
