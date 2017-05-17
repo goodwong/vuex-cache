@@ -16,20 +16,20 @@ export default function builder (api) {
     return Vue.http.get(`${api}`, { params }).then(r => r.json())
   }
 
-  function find (id) {
-    return Vue.http.get(endpoint(api, id)).then(r => r.json())
+  function find (id, params) {
+    return Vue.http.get(endpoint(api, id), { params }).then(r => r.json())
   }
 
-  function create (payload) {
-    return Vue.http.post(`${api}`, payload).then(r => r.json())
+  function create (payload, params) {
+    return Vue.http.post(`${api}`, payload, { params }).then(r => r.json())
   }
 
-  function update (id, payload) {
-    return Vue.http.put(endpoint(api, id), payload).then(r => r.json())
+  function update (id, payload, params) {
+    return Vue.http.put(endpoint(api, id), payload, { params }).then(r => r.json())
   }
 
-  function destroy (id) {
-    return Vue.http.delete(endpoint(api, id))
+  function destroy (id, params) {
+    return Vue.http.delete(endpoint(api, id), { params })
   }
 
   function endpoint (endpoint, id) {
@@ -71,12 +71,13 @@ export default function builder (api) {
           return items
         })
       },
-      FIND ({ state, commit }, { id, refresh }) {
+      FIND ({ state, commit }, { id, params, cache }) {
         let item = state.items[id]
-        if (item && !refresh) {
+        cache = typeof cache === 'undefined' ? true : cache
+        if (item && cache) {
           return Promise.resolve(item)
         }
-        return find(id)
+        return find(id, params)
         .then(item => {
           commit('SET_ITEM', item)
           return item
@@ -84,7 +85,7 @@ export default function builder (api) {
       },
       CREATE ({ state, commit }, { parent, params, payload }) {
         parent = parent || 'defalut'
-        return create(payload)
+        return create(payload, params)
         .then(item => {
           commit('SET_ITEM', item)
           if (state.lists[parent]) {
@@ -93,16 +94,16 @@ export default function builder (api) {
           return item
         })
       },
-      UPDATE ({ state, commit }, { id, payload }) {
-        return update(id, payload)
+      UPDATE ({ state, commit }, { id, payload, params }) {
+        return update(id, payload, params)
         .then(item => {
           commit('SET_ITEM', item)
           return item
         })
       },
-      DELETE ({ state, commit }, { parent, id }) {
+      DELETE ({ state, commit }, { parent, id, params }) {
         parent = parent || 'defalut'
-        return destroy(id)
+        return destroy(id, params)
         .then(() => {
           commit('DEL_ITEM', id)
           if (state.lists[parent]) {

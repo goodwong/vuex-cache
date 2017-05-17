@@ -142,7 +142,7 @@ npm install vuex-resource --save
   this.$store.dispatch('production/UPDATE', { id, payload, params: {shop_id: 3} })
   // PUT http(s)://your.domain.name/shops/3/productions/15?with=sale
 
-  this.$store.dispatch('production/CREATE', { id, params: {shop_id: 3} })
+  this.$store.dispatch('production/DELETE', { id, params: {shop_id: 3} })
   // DELETE http(s)://your.domain.name/shops/3/productions/15?with=sale
 ```
 
@@ -152,22 +152,28 @@ npm install vuex-resource --save
    你在导航栏里有某商家的一份产品分类列表，同时你在分类管理里面更新了某分类的名称，那么导航栏里的对应分类会自动更新；
    增加、删除分类同样会即时'同步'到导航栏上。
 
-2. 有些场景下，列表可能会有许多个，列表与与列表之间可能存在交集，因此需要传递一个额外的参数用于在缓存里区分不同的列表：
+2. 有些场景下，列表可能会有许多个，~~列表与与列表之间可能存在交集，~~
+（目前无法处理同属于多个的对象）因此需要传递一个额外的参数用于在缓存里区分不同的列表：
 
 ```js
   // parent 只是用来区分列表的一个key，只要唯一就可以。可以是字符串也可以是数字，如
   this.$store.dispatch('production/LOAD', { parent: 'shop_3', params: {shop_id: 3} })
   this.$store.dispatch('production/LOAD', { parent: 3, params: {shop_id: 3} })
 
-  this.$store.dispatch('production/FIND', { parent: 3, id, params: {shop_id: 3} })
-
   this.$store.dispatch('production/CREATE', { parent: 3, payload, params: {shop_id: 3} })
 
-  this.$store.dispatch('production/UPDATE', { parent: 3, id, payload, params: {shop_id: 3} })
-
-  this.$store.dispatch('production/CREATE', { parent: 3, id, params: {shop_id: 3} })
+  this.$store.dispatch('production/DELETE', { parent: 3, id, params: {shop_id: 3} })
 
   this.$store.getters['production/list'](3)
+```
+
+3. 有时候不需要缓存：
+
+```js
+  // 如根据关键词搜索时
+  this.$store.dispatch('production/LOAD', { parent: 'shop_3', params: {keyword: 'xx'}, cache: false })
+  // 如重新获取单个对象
+  this.$store.dispatch('production/FIND', { id, cache: false })
 ```
 
 
