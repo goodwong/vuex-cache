@@ -102,7 +102,7 @@ npm install vuex-resource --save
 5. 删除
 
   ```js
-  this.$store.dispatch('production/CREATE', { id }).then(() => {})
+  this.$store.dispatch('production/DELETE', { id }).then(() => {})
   ```
 
 6. 使用getters
