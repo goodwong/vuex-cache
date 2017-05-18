@@ -141,7 +141,7 @@ export default function builder (api) {
       list: (state) => (parent) => {
         parent = parent || 'defalut'
         let list = state.lists[parent]
-        return list ? list.map(i => state.items[i]).sort((a, b) => a.id - b.id) : []
+        return list ? list.map(i => state.items[i]).filter(i => i).sort((a, b) => a.id - b.id) : []
       }
     }
   }
