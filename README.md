@@ -171,7 +171,7 @@ npm install vuex-resource --save
 
 ```js
   // 如根据关键词搜索时
-  this.$store.dispatch('production/LOAD', { parent: 'shop_3', params: {keyword: 'xx'}, cache: false })
+  this.$store.dispatch('production/LOAD', { params: {keyword: 'xx'}, cache: false })
   // 如重新获取单个对象
   this.$store.dispatch('production/FIND', { id, cache: false })
 ```
