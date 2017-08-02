@@ -11,25 +11,51 @@
 
 import Vue from 'vue'
 
-export default function builder (api) {
+export default function builder (_api) {
   function get (params) {
-    return Vue.http.get(`${api}`, { params }).then(r => r.json())
+    let api = _api
+    api = fill(api, params)
+    return Vue.http.get(api, { params }).then(r => r.json())
   }
 
   function find (id, params) {
-    return Vue.http.get(endpoint(api, id), { params }).then(r => r.json())
+    let api = endpoint(_api, id)
+    api = fill(api, params)
+    return Vue.http.get(api, { params }).then(r => r.json())
   }
 
   function create (payload, params) {
-    return Vue.http.post(`${api}`, payload, { params }).then(r => r.json())
+    let api = _api
+    api = fill(api, params)
+    return Vue.http.post(api, payload, { params }).then(r => r.json())
   }
 
   function update (id, payload, params) {
-    return Vue.http.put(endpoint(api, id), payload, { params }).then(r => r.json())
+    let api = endpoint(_api, id)
+    api = fill(api, params)
+    // return Vue.http.put(endpoint(api, id), payload).then(r => r.json())
+
+    // fix bug for laravel request parse on PUT
+    // see: https://github.com/laravel/framework/issues/13457#issuecomment-239451567
+
+    // (1)
+    // if (payload.append) {
+    //   payload.append('_method', 'PUT')
+    // } else {
+    //   payload._method = 'PUT'
+    // }
+
+    // (2)
+    params = params || {}
+    params._method = 'PUT'
+
+    return Vue.http.post(api, payload, { params }).then(r => r.json())
   }
 
   function destroy (id, params) {
-    return Vue.http.delete(endpoint(api, id), { params })
+    let api = endpoint(_api, id)
+    api = fill(api, params)
+    return Vue.http.delete(api, { params })
   }
 
   function endpoint (endpoint, id) {
@@ -38,6 +64,24 @@ export default function builder (api) {
     } else {
       return endpoint + `/${id}`
     }
+  }
+
+  function fill (api, params) {
+    if (!params) {
+      return api
+    }
+    let placeholders = api.match(/:\w+/g)
+    if (!placeholders) {
+      return api
+    }
+    placeholders.forEach(p => {
+      let key = p.substr(1)
+      if (params[key]) {
+        api = api.replace(p, params[key])
+        delete params[key]
+      }
+    })
+    return api
   }
 
   return {
