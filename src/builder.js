@@ -108,8 +108,12 @@ export default function builder (_api) {
         }
         return get(params)
         .then(items => {
-          commit('SET', items)
+          // response for not array
+          if (!(items.length >= 0)) {
+            return items
+          }
           if (cache) {
+            commit('SET', items)
             commit('SET_LIST', { parent, list: items.map(i => i.id) })
           }
           return items
