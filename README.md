@@ -191,6 +191,57 @@ npm install vuex-resource --save
   export default module
 ```
 
+另一种更加强大的方式
+
+```js
+import builder from './builder'
+
+const module = builder('user-attributes')
+
+// http://tool.chinaz.com/tools/use
+let colors = [
+  '#FFCCCC',
+  '#CCCCFF',
+  '#99CC66',
+  '#0066CC',
+  '#CCCC00',
+  '#99CCCC',
+  '#0099CC',
+  '#CC3333',
+  '#CCCCCC',
+  '#FFFF00',
+  '#996699'
+]
+
+export default {
+  namespaced: true,
+  state: {
+    colors: {},
+    ...module.state
+  },
+  actions: {
+    ...module.actions
+  },
+  mutations: {
+    ...module.mutations
+  },
+  getters: {
+    color: (state) => (attributeId, tag) => {
+      let attribute = state.items[attributeId]
+      if (attribute.settings.options.indexOf(tag) === -1) {
+        attribute.settings.options.push(tag)
+      }
+      return colors[attribute.settings.options.indexOf(tag)]
+    },
+    ...module.getters
+  }
+}
+
+```
+
+
+
+
 ## 原理
 主要来看一个module的数据结构吧：
 ```js
