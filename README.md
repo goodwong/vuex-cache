@@ -196,7 +196,7 @@ npm install vuex-resource --save
 ```js
 import builder from './builder'
 
-const module = builder('user-attributes')
+const base = builder('user-attributes')
 
 // http://tool.chinaz.com/tools/use
 let colors = [
@@ -217,13 +217,13 @@ export default {
   namespaced: true,
   state: {
     colors: {},
-    ...module.state
+    ...base.state
   },
   actions: {
-    ...module.actions
+    ...base.actions
   },
   mutations: {
-    ...module.mutations
+    ...base.mutations
   },
   getters: {
     color: (state) => (attributeId, tag) => {
@@ -233,7 +233,7 @@ export default {
       }
       return colors[attribute.settings.options.indexOf(tag)]
     },
-    ...module.getters
+    ...base.getters
   }
 }
 
