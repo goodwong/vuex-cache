@@ -84,6 +84,8 @@ export default function builder (_api) {
     return api
   }
 
+  let fetchings = {}
+
   return {
     namespaced: true,
 
@@ -101,12 +103,22 @@ export default function builder (_api) {
         payload = payload || {}
         let { parent, params, cache } = payload
         parent = parent || 'defalut'
+
+        // result cached ?
         cache = typeof cache === 'undefined' ? true : cache
-        let ids = state.lists[parent]
-        if (ids && cache) {
-          return Promise.resolve(ids.map(id => state.items[id]))
+        let cachedIds = state.lists[parent]
+        if (cache && cachedIds) {
+          console.log('result cached... LOAD:', _api, parent)
+          return Promise.resolve(cachedIds.map(id => state.items[id]))
         }
-        return get(params)
+
+        // fetching cached...
+        if (cache && fetchings[parent]) {
+          console.log('fetching cached... LOAD', _api, parent)
+          return fetchings[parent]
+        }
+
+        let fetching = get(params)
         .then(items => {
           // response for not array
           if (!(items.length >= 0)) {
@@ -115,16 +127,25 @@ export default function builder (_api) {
           if (cache) {
             commit('SET', items)
             commit('SET_LIST', { parent, list: items.map(i => i.id) })
+            delete fetchings[parent]
           }
           return items
         })
+        if (cache) {
+          fetchings[parent] = fetching
+        }
+        return fetching
       },
       FIND ({ state, commit }, { id, params, cache }) {
         let item = state.items[id]
+
+        // result cached ?
         cache = typeof cache === 'undefined' ? true : cache
-        if (item && cache) {
+        if (cache && item) {
+          console.log('result cached... FIND', _api, id)
           return Promise.resolve(item)
         }
+
         return find(id, params)
         .then(item => {
           commit('SET_ITEM', item)
