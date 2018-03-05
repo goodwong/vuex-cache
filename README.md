@@ -9,7 +9,7 @@
 
 ## 安装
 
-使用npm安装
+使用npm安装（未发布node package，请使用git submodule或git subtree的方式添加吧）
 ```shell
 npm install vuex-resource --save
 ```
@@ -24,7 +24,7 @@ npm install vuex-resource --save
 
   import Vue from 'vue'
   import Vuex from 'vuex'
-  import production from './production_order'
+  import production from './production'
   
   Vue.use(Vuex)
   
@@ -43,8 +43,8 @@ npm install vuex-resource --save
   // src/store/production.js
 
   import builder from 'vuex-resource'
-  export default builder('productions')
-  ```
+  export default builder('productions') // 参数是api地址
+  ```
   
 3. 使用
 
@@ -53,7 +53,7 @@ npm install vuex-resource --save
 
   <template>
     <div class='production-list-page'>
-      <pre>{{ productions[0] }}</pre>
+      <pre>{{ productions }}</pre>
     </div>
   </template>
 
@@ -62,8 +62,8 @@ npm install vuex-resource --save
       name: 'production-list-page',
       computed: {
         productions () {
-          return this.$store.getters['production/list']()
-        }
+          return this.$store.getters['production/list']() // **注意，不能漏了()**
+        }
       },
       created () {
         this.$store.dispatch('production/LOAD')
@@ -171,9 +171,9 @@ npm install vuex-resource --save
 
 ```js
   // 如根据关键词搜索时
-  this.$store.dispatch('production/LOAD', { params: {keyword: 'xx'}, cache: false })
+  this.$store.dispatch('production/LOAD', { cache: false, params: {keyword: 'xx'} })
   // 如重新获取单个对象
-  this.$store.dispatch('production/FIND', { id, cache: false })
+  this.$store.dispatch('production/FIND', { cache: false, id })
 ```
 
 
@@ -191,7 +191,7 @@ npm install vuex-resource --save
   export default module
 ```
 
-另一种更加强大的方式
+另一种更加简单又强大的方式
 
 ```js
 import builder from './builder'
@@ -214,7 +214,7 @@ let colors = [
 ]
 
 export default {
-  namespaced: true,
+  namespaced: true, // **注意不能漏掉**
   state: {
     colors: {},
     ...base.state
@@ -265,7 +265,7 @@ export default {
 
 - 解耦vue-resource
 
-- 首次并发请求的优化，如同时有2个地方LOAD一个列表，此时由于缓存中还没有数据，所以导致2次重复的request发送到服务器
+- ~~首次并发请求的优化，如同时有2个地方LOAD一个列表，此时由于缓存中还没有数据，所以导致2次重复的request发送到服务器（）~~ (已经解决)
 
 
 
@@ -279,6 +279,6 @@ export default {
 
 2. 没有对数据的缓存功能，有些数据会在很多地方使用，需要减少重复请求
 
-基于以上2点，还是觉得要继续发布。唉，可惜了这个npm包名被占用了~
+基于以上2点，还是觉得要继续发布。唉，可惜了这个npm包名被占用了~（犹豫了一下，又不知道什么原因没有发布）
 
 
