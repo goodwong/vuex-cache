@@ -1,15 +1,22 @@
 
-# Vuex 2 resource
+# Vuex 2 cache
 
-使用vuex的vue-resource
+使用vuex与vue-resource结合2.0版
 
-> **注意：** 未完成
+> **注意：** 未完成，时间仓促，文档有点乱哈～
 
 
+## 特色
+1. 数据缓存，相同的请求不会再发送第二次
+2. 并发定相同请求自动合并，比如两个列表同时请求用户1的数据，会自动合并成一个请求
+3. 节省代码，基本上两三行代码定义一个`vuex module`，使用的时候只用 `dispatch` + `computed` 几个属性
+4. 支持分页器
+5. 支持`LOAD_MORE`方式加载数据
+6. ~~支持数据离线缓存~~（`未完成`）
 
 ## 安装
 
-使用npm安装（未发布node package，请使用git submodule或git subtree的方式添加吧）
+使用npm安装（未发布node package，请使用`git submodule`或`git subtree`的方式添加吧）
 ```shell
 npm install vuex-resource --save
 ```
@@ -62,7 +69,7 @@ npm install vuex-resource --save
       name: 'production-list-page',
       computed: {
         productions () {
-          return this.$store.getters['production/list']() // **注意，不能漏了()**
+          return this.$store.getters['production/items']() // **注意，不能漏了()**
         }
       },
       created () {
@@ -109,8 +116,10 @@ npm install vuex-resource --save
 
   ```js
   // 注意，getters返回的是方法，需要执行这个方法才会返回数据
-  // 任何模块都有list这个getters，其它的getters需要自行添加
-  return this.$store.getters['production/list']()
+  // 任何模块都有items/item/pagination这几个getters，其它的getters需要自行添加
+  return this.$store.getters['production/item']()
+  return this.$store.getters['production/items']()
+  return this.$store.getters['production/pagination']()
   ```
 
 7. 使用state
@@ -133,6 +142,9 @@ npm install vuex-resource --save
   this.$store.dispatch('production/LOAD', { params: {shop_id: 3} })
   // GET http(s)://your.domain.name/shops/3/productions?with=sale
 
+  this.$store.dispatch('production/LOAD_MORE', { params: {shop_id: 3, page: 2} })
+  // GET http(s)://your.domain.name/shops/3/productions?with=sale&page=2
+
   this.$store.dispatch('production/FIND', { id, params: {shop_id: 3} })
   // GET http(s)://your.domain.name/shops/3/productions/15?with=sale
 
@@ -153,27 +165,28 @@ npm install vuex-resource --save
    增加、删除分类同样会即时'同步'到导航栏上。
 
 2. 有些场景下，列表可能会有许多个，~~列表与与列表之间可能存在交集，~~
-（目前无法处理同属于多个的对象）因此需要传递一个额外的参数用于在缓存里区分不同的列表：
 
 ```js
-  // parent 只是用来区分列表的一个key，只要唯一就可以。可以是字符串也可以是数字，如
-  this.$store.dispatch('production/LOAD', { parent: 'shop_3', params: {shop_id: 3} })
-  this.$store.dispatch('production/LOAD', { parent: 3, params: {shop_id: 3} })
+  // cache 只是用来区分列表的一个key，只要唯一就可以。可以是字符串也可以是数字，如
+  this.$store.dispatch('production/LOAD', { cache: 'shop_3', params: {shop_id: 3} })
+  this.$store.dispatch('production/LOAD', { cache: 3, params: {shop_id: 3} })
 
-  this.$store.dispatch('production/CREATE', { parent: 3, payload, params: {shop_id: 3} })
+  this.$store.dispatch('production/CREATE', { cache: 3, payload, params: {shop_id: 3} })
 
-  this.$store.dispatch('production/DELETE', { parent: 3, id, params: {shop_id: 3} })
+  this.$store.dispatch('production/DELETE', { cache: 3, id, params: {shop_id: 3} })
 
   this.$store.getters['production/list'](3)
 ```
+> `LOAD`、`LOAD_MORE`、`CREATE`默认的cache是`ALL`  
+> `FIND` 默认是`CURRENT`
 
-3. 有时候不需要缓存：
+3. 有时候需要强制拉取数据：
 
 ```js
   // 如根据关键词搜索时
-  this.$store.dispatch('production/LOAD', { cache: false, params: {keyword: 'xx'} })
+  this.$store.dispatch('production/LOAD', { refresh: true, params: {keyword: 'xx'} })
   // 如重新获取单个对象
-  this.$store.dispatch('production/FIND', { cache: false, id })
+  this.$store.dispatch('production/FIND', { refresh: true, id })
 ```
 
 
@@ -192,6 +205,7 @@ npm install vuex-resource --save
 ```
 
 另一种更加简单又强大的方式
+> V2版本尚未测试确认!
 
 ```js
 import builder from './builder'
@@ -240,32 +254,11 @@ export default {
 ```
 
 
-
-
-## 原理
-主要来看一个module的数据结构吧：
-```js
-  return {
-    namespaced: true,
-
-    state: {
-      items: {
-        /* id: item */
-      },
-      lists: {
-        /* parent_id: [id, id, ...] */
-      }
-    }
-  }
-```
-
 ## roadmap
 
 - 缓存到localStorage（有单独的过期时间），可以强制刷新
 
 - 解耦vue-resource
-
-- ~~首次并发请求的优化，如同时有2个地方LOAD一个列表，此时由于缓存中还没有数据，所以导致2次重复的request发送到服务器（）~~ (已经解决)
 
 
 
@@ -282,3 +275,6 @@ export default {
 基于以上2点，还是觉得要继续发布。唉，可惜了这个npm包名被占用了~（犹豫了一下，又不知道什么原因没有发布）
 
 
+2018-4-14
+
+还发现另一个npm包：vuex-cache，但它的侧重点只在于请求本身的缓存。
