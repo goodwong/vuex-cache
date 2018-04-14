@@ -11,62 +11,63 @@
 
 import Vue from 'vue'
 
-export default function builder (_api) {
-  function get (params) {
-    let api = _api
-    api = fill(api, params)
+const defaultResolvers = {
+  id: response => response.id,
+  item: response => response,
+  items: response => response.data || response,
+  pagination: response => response.data ? { total: response.total, per_page: response.per_page, current_page: response.current_page, last_page: response.last_page } : null
+}
+
+class Http {
+
+  api = null
+
+  constructor (_api) {
+    this.api = _api
+  }
+
+  get (params) {
+    let api = this._fill(this.api, params)
     return Vue.http.get(api, { params }).then(r => r.json())
   }
 
-  function find (id, params) {
-    let api = endpoint(_api, id)
-    api = fill(api, params)
+  find (id, params) {
+    let api = this._fill(this._endpoint(this.api, id), params)
     return Vue.http.get(api, { params }).then(r => r.json())
   }
 
-  function create (payload, params) {
-    let api = _api
-    api = fill(api, params)
+  create (payload, params) {
+    let api = this._fill(this.api, params)
     return Vue.http.post(api, payload, { params }).then(r => r.json())
   }
 
-  function update (id, payload, params) {
-    let api = endpoint(_api, id)
-    api = fill(api, params)
-    // return Vue.http.put(endpoint(api, id), payload).then(r => r.json())
+  update (id, payload, params) {
+    let api = this._fill(this._endpoint(this.api, id), params)
+    // return Vue.http.put(api, payload).then(r => r.json())
 
     // fix bug for laravel request parse on PUT
     // see: https://github.com/laravel/framework/issues/13457#issuecomment-239451567
-
-    // (1)
-    // if (payload.append) {
-    //   payload.append('_method', 'PUT')
-    // } else {
-    //   payload._method = 'PUT'
-    // }
-
-    // (2)
     params = params || {}
     params._method = 'PUT'
-
     return Vue.http.post(api, payload, { params }).then(r => r.json())
   }
 
-  function destroy (id, params) {
-    let api = endpoint(_api, id)
-    api = fill(api, params)
+  destroy (id, params) {
+    let api = this._fill(this._endpoint(this.api, id), params)
     return Vue.http.delete(api, { params })
   }
 
-  function endpoint (endpoint, id) {
-    if (endpoint.indexOf('?') > -1) {
-      return endpoint.replace(/\?/, `/${id}?`)
-    } else {
-      return endpoint + `/${id}`
-    }
+  /**
+   * 在api后面加上:id
+   */
+  _endpoint (_endpoint, id) {
+    return _endpoint.indexOf('?') > -1 ? _endpoint.replace(/\?/, `/${id}?`) : `${_endpoint}/${id}`
   }
 
-  function fill (api, params) {
+  /**
+   * 用params里的参数替换掉api里的placeholder，同时移除掉params里的项目
+   */
+  _fill (api, params) {
     if (!params) {
       return api
     }
@@ -83,7 +84,17 @@ export default function builder (_api) {
     })
     return api
   }
+}
 
+export default function builder (api, resolvers) {
+
+  // http 请求类
+  const http = new Http(api)
+
+  // http 结果解析器，可以自定义
+  resolvers = resolvers || defaultResolvers
+
+  // http 请求缓存
   let fetchings = {}
 
   return {
@@ -93,113 +104,260 @@ export default function builder (_api) {
       items: {
         /* id: item */
       },
-      lists: {
-        /* parent_id: [id, id, ...] */
+      caches: {
+        /* 
+        profile: {
+          params: '' // 排序过后的字符串，用于判断是否需要更新
+          type: 'local:15d', // local | runtime
+          ids: [1] // FIND 也需要这么定义
+          pagination: null || {
+            total: 105,
+            last: 5,
+            current: 1
+          }
+        }
+        */
       }
     },
 
     actions: {
       LOAD ({ state, commit }, payload) {
         payload = payload || {}
-        let { parent, params, cache } = payload
-        parent = parent || 'defalut'
+        let { cache, params, refresh } = payload
+        cache = cache || 'ALL'
+        let paramSerialized = serialize(params)
 
-        // result cached ?
-        cache = typeof cache === 'undefined' ? true : cache
-        let cachedIds = state.lists[parent]
-        if (cache && cachedIds) {
-          console.log('result cached... LOAD:', _api, parent)
-          return Promise.resolve(cachedIds.map(id => state.items[id]))
+        /**
+         * 步骤：
+         * 1. refresh
+         * 2. 是否有缓存？
+         * 3. 缓存的params是否一致
+         * 
+         * 以上任一不符：
+         * 1. 请求
+         * 2. 存储fetchings
+         * 3. 存储params
+         * 4. 存储ids
+         * 5. 存储items
+         * 5. 存储pagination
+         * 6. 删除fetchings
+         */
+
+        // cache
+        let cached = state.caches[cache]
+        if (cached && cached.params !== paramSerialized) {
+          cached = null
+        }
+        if (!refresh && cached) {
+          console.log(`LOAD(${cache}) ${api}@${paramSerialized} ... [Result cache hit!]:`)
+          return Promise.resolve(cached.ids.map(id => state.items[id]))
         }
 
-        // fetching cached...
-        if (cache && fetchings[parent]) {
-          console.log('fetching cached... LOAD', _api, parent)
-          return fetchings[parent]
+        // fetching...
+        let fetchKey = `LOAD:${cache}:${paramSerialized}`
+        if (fetchings[fetchKey]) {
+          console.log(`LOAD(${cache}) ${api}@${paramSerialized} ... [Fetching cache hit!]:`)
+          return fetchings[fetchKey]
         }
 
-        let fetching = get(params)
-        .then(items => {
-          // response for not array
-          if (!(items.length >= 0)) {
+        // request...
+        fetchings[fetchKey] = http.get(params)
+          .then(response => {
+            // set
+            let items = resolvers.items(response)
+            commit('ASSIGN', items)
+            let ids = items.map(i => resolvers.id(i))
+            let pagination = resolvers.pagination(response)
+            commit('SET_CACHE', { cache, ids, pagination, params: paramSerialized })
+            // remove...
+            commit('CLEAN_UNUSED_ITEMS')
+            // clear...
+            delete fetchings[fetchKey]
             return items
-          }
-          if (cache) {
-            commit('SET', items)
-            commit('SET_LIST', { parent, list: items.map(i => i.id) })
-            delete fetchings[parent]
-          }
-          return items
-        })
-        if (cache) {
-          fetchings[parent] = fetching
-        }
-        return fetching
+          })
+          .catch(e => {
+            console.error(e)
+            // clear...
+            delete fetchings[fetchKey]
+            // re-throw
+            throw e
+          })
+        return fetchings[fetchKey]
       },
-      FIND ({ state, commit }, { id, params, cache }) {
-        let item = state.items[id]
+      LOAD_MORE ({ state, commit }, payload) {
+        payload = payload || {}
+        let { cache, params, refresh } = payload
+        cache = cache || 'ALL'
+        let paramSerialized = serialize(params)
 
-        // result cached ?
-        cache = typeof cache === 'undefined' ? true : cache
-        if (cache && item) {
-          console.log('result cached... FIND', _api, id)
-          return Promise.resolve(item)
+        // cache
+        let cached = state.caches[cache]
+        if (cached && cached.params !== paramSerialized) {
+          cached = null
+        }
+        if (!refresh && cached) {
+          console.log(`LOAD_MORE(${cache}) ${api}@${paramSerialized} ... [Result cache hit!]:`)
+          return Promise.resolve(cached.ids.map(id => state.items[id]))
         }
 
-        return find(id, params)
-        .then(item => {
-          commit('SET_ITEM', item)
-          return item
-        })
+        // fetching...
+        let fetchKey = `LOAD_MORE:${cache}:${paramSerialized}`
+        if (fetchings[fetchKey]) {
+          console.log(`LOAD_MORE(${cache}) ${api}@${paramSerialized} ... [Fetching cache hit!]:`)
+          return fetchings[fetchKey]
+        }
+
+        // request...
+        fetchings[fetchKey] = http.get(params)
+          .then(response => {
+            // set
+            let items = resolvers.items(response)
+            commit('ASSIGN', items)
+            let ids = items.map(i => resolvers.id(i))
+            let cached = state.caches[cache]
+            if (cached) {
+              ids = cached.ids.concat(ids)
+            }
+            ids = [...new Set(ids)] // unique
+            let pagination = resolvers.pagination(response)
+            commit('SET_CACHE', { cache, ids, pagination, params: paramSerialized })
+            // remove...
+            commit('CLEAN_UNUSED_ITEMS')
+            // clear...
+            delete fetchings[fetchKey]
+            return ids.map(id => state.items[id])
+          })
+          .catch(e => {
+            console.error(e)
+            // clear...
+            delete fetchings[fetchKey]
+            // re-throw
+            throw e
+          })
+        return fetchings[fetchKey]
       },
-      CREATE ({ state, commit }, { parent, params, payload }) {
-        parent = parent || 'defalut'
-        return create(payload, params)
-        .then(item => {
-          commit('SET_ITEM', item)
-          if (state.lists[parent]) {
-            commit('APPEND_LIST', { parent, id: item.id })
-          }
-          return item
-        })
+      FIND ({ state, commit }, { id, params, cache, refresh }) {
+        cache = cache || 'CURRENT'
+        let paramSerialized = serialize(params)
+
+        // cached
+        let cached = state.caches[cache]
+        if (cached && cached.params !== paramSerialized) {
+          cached = null
+        }
+        if (!refresh && cached) {
+          console.log(`FIND(${cache}):${id} ${api}@${paramSerialized} ... [Result cache hit!]:`)
+          return Promise.resolve(state.items[id])
+        }
+
+        // fetching...
+        let fetchKey = `FIND:${cache}:${paramSerialized}`
+        if (fetchings[fetchKey]) {
+          console.log(`FIND(${cache}):${id} ${api}@${paramSerialized} ... [Fetching cache hit!]:`)
+          return fetchings[fetchKey]
+        }
+
+        // request...
+        fetchings[fetchKey] = http.find(id, params)
+          .then(response => {
+            // set
+            let item = resolvers.item(response)
+            commit('SET_ITEM', item)
+            let id = resolvers.id(item)
+            commit('SET_CACHE', { cache, ids: [id], params: paramSerialized })
+            // remove...
+            commit('CLEAN_UNUSED_ITEMS')
+            // clear...
+            delete fetchings[fetchKey]
+            return item
+          })
+          .catch(e => {
+            console.error(e)
+            // clear...
+            delete fetchings[fetchKey]
+            // re-throw
+            throw e
+          })
+        return fetchings[fetchKey]
+      },
+      CREATE ({ state, commit }, { cache, params, payload }) {
+        cache = cache || 'ALL'
+        return http.create(payload, params)
+          .then(response => {
+            // set
+            let item = resolvers.item(response)
+            let id = resolvers.id(item)
+            commit('SET_ITEM', item)
+            // cache
+            let cached = state.caches[cache]
+            if (cached) {
+              commit('APPEND_CACHE_ITEM', { cache, id })
+            }
+            return item
+          })
       },
       UPDATE ({ state, commit }, { id, payload, params }) {
-        return update(id, payload, params)
-        .then(item => {
-          commit('SET_ITEM', item)
-          return item
-        })
+        return http.update(id, payload, params)
+          .then(item => {
+            commit('SET_ITEM', item)
+            return item
+          })
       },
-      DELETE ({ state, commit }, { parent, id, params }) {
-        parent = parent || 'defalut'
-        return destroy(id, params)
-        .then(() => {
-          commit('DEL_ITEM', id)
-          if (state.lists[parent]) {
-            commit('REMOVE_LIST_ITEM', { parent, id })
-          }
-        })
+      DELETE ({ state, commit }, { id, params }) {
+        return http.destroy(id, params)
+          .then(() => {
+            commit('DEL_ITEM', id)
+            // 检查所有的caches，如果含有这个id，则去掉
+            let matchs = Object.keys(state.caches)
+              .filter(key => state.caches[key].ids.indexOf(id) > -1)
+              .forEach(key => {
+                commit('REMOVE_CACHE_ITEM', { cache: key, id })
+              })
+          })
       }
     },
 
     mutations: {
-      SET_LIST (state, { parent, list }) {
-        Vue.set(state.lists, parent, list)
+      SET_CACHE (state, { cache, ids, pagination, params }) {
+        Vue.set(state.caches, cache, { cache, ids, pagination, params })
       },
-      APPEND_LIST (state, { parent, id }) {
-        state.lists[parent].push(id)
+      CLEAN_UNUSED_ITEMS (state) {
+        let keeps = Object.keys(state.caches)
+          .map(i => state.caches[i].ids.join(','))
+          .join(',')
+          .split(',')
+        Object.keys(state.items).forEach(id => {
+          if (keeps.indexOf(id) === -1) {
+            Vue.delete(state.items, id)
+          }
+        })
       },
-      REMOVE_LIST_ITEM (state, { parent, id }) {
-        let index = state.lists[parent].indexOf(id)
-        state.lists[parent].splice(index, 1)
+      APPEND_CACHE_ITEM (state, { cache, id }) {
+        state.caches[cache] && state.caches[cache].ids.push(id)
       },
-      SET (state, items) {
+      REMOVE_CACHE_ITEM (state, { cache, id }) {
+        if (!state.caches[cache]) {
+          return
+        }
+        let index = state.caches[cache].ids.indexOf(id)
+        state.caches[cache].ids.splice(index, 1)
+      },
+      ASSIGN (state, items) {
         items.forEach(item => {
-          Vue.set(state.items, item.id, item)
+          Vue.set(state.items, resolvers.id(item), item)
         })
       },
       SET_ITEM (state, item) {
-        Vue.set(state.items, item.id, item)
+        let id = resolvers.id(item)
+        if (!state.items[id]) {
+          Vue.set(state.items, id, item)
+        } else {
+          // 避免字段少的覆盖字段多的情况出现
+          Vue.set(state.items, id, {
+            ...state.items[id],
+            ...item
+          })
+        }
       },
       DEL_ITEM (state, id) {
         Vue.delete(state.items, id)
@@ -207,11 +365,39 @@ export default function builder (_api) {
     },
 
     getters: {
-      list: (state) => (parent) => {
-        parent = parent || 'defalut'
-        let list = state.lists[parent]
-        return list ? list.map(i => state.items[i]).filter(i => i).sort((a, b) => a.id - b.id) : []
+      items: (state) => (cache) => {
+        cache = cache || 'ALL'
+        let cached = state.caches[cache]
+        if (!cached) {
+          return []
+        }
+        return cached.ids
+          .map(i => state.items[i])
+          .filter(i => i)
+      },
+      item: (state) => (cache) => {
+        cache = cache || 'CURRENT'
+        let cached = state.caches[cache]
+        if (!cached) {
+          return null
+        }
+        return state.items[cached.ids[0]]
+      },
+      pagination: (state) => (cache) => {
+        cache = cache || 'ALL'
+        let cached = state.caches[cache]
+        if (!cached) {
+          return null
+        }
+        return cached.pagination
       }
     }
+  }
+
+  function serialize (params) {
+    if (!params) {
+      return null
+    }
+    return Object.keys(params).sort().map(key => `${key}=${params[key]}`).join('&')
   }
 }
