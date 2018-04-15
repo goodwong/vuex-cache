@@ -19,7 +19,6 @@ const defaultResolvers = {
 }
 
 class Http {
-
   api = null
 
   constructor (_api) {
@@ -87,7 +86,6 @@ class Http {
 }
 
 export default function builder (api, resolvers) {
-
   // http 请求类
   const http = new Http(api)
 
@@ -105,7 +103,7 @@ export default function builder (api, resolvers) {
         /* id: item */
       },
       caches: {
-        /* 
+        /*
         profile: {
           params: '' // 排序过后的字符串，用于判断是否需要更新
           type: 'local:15d', // local | runtime
@@ -132,7 +130,7 @@ export default function builder (api, resolvers) {
          * 1. refresh
          * 2. 是否有缓存？
          * 3. 缓存的params是否一致
-         * 
+         *
          * 以上任一不符：
          * 1. 请求
          * 2. 存储fetchings
@@ -245,6 +243,9 @@ export default function builder (api, resolvers) {
         if (cached && cached.params !== paramSerialized) {
           cached = null
         }
+        if (cached && cached.ids[0] !== id) {
+          cached = null
+        }
         if (!refresh && cached) {
           console.log(`FIND(${cache}):${id} ${api}@${paramSerialized} ... [Result cache hit!]:`)
           return Promise.resolve(state.items[id])
@@ -308,7 +309,7 @@ export default function builder (api, resolvers) {
           .then(() => {
             commit('DEL_ITEM', id)
             // 检查所有的caches，如果含有这个id，则去掉
-            let matchs = Object.keys(state.caches)
+            Object.keys(state.caches)
               .filter(key => state.caches[key].ids.indexOf(id) > -1)
               .forEach(key => {
                 commit('REMOVE_CACHE_ITEM', { cache: key, id })
