@@ -105,8 +105,8 @@ export default function builder (api, resolvers) {
       caches: {
         /*
         profile: {
-          params: '' // 排序过后的字符串，用于判断是否需要更新
           type: 'local:15d', // local | runtime
+          params: '' // 排序过后的字符串，用于判断是否需要更新
           ids: [1] // FIND 也需要这么定义
           pagination: null || {
             total: 105,
@@ -114,6 +114,16 @@ export default function builder (api, resolvers) {
             current: 1
           }
         }
+        */
+      },
+      loading: {
+        /*
+        ALL: false
+        */
+      },
+      submitting: {
+        /*
+        ALL: false
         */
       }
     },
@@ -159,6 +169,7 @@ export default function builder (api, resolvers) {
         }
 
         // request...
+        commit('SET_LOADING', { cache, value: true })
         fetchings[fetchKey] = http.get(params)
           .then(response => {
             // set
@@ -170,12 +181,14 @@ export default function builder (api, resolvers) {
             // remove...
             commit('CLEAN_UNUSED_ITEMS')
             // clear...
+            commit('SET_LOADING', { cache, value: false })
             delete fetchings[fetchKey]
             return items
           })
           .catch(e => {
             console.error(e)
             // clear...
+            commit('SET_LOADING', { cache, value: false })
             delete fetchings[fetchKey]
             // re-throw
             throw e
@@ -206,6 +219,7 @@ export default function builder (api, resolvers) {
         }
 
         // request...
+        commit('SET_LOADING', { cache, value: true })
         fetchings[fetchKey] = http.get(params)
           .then(response => {
             // set
@@ -222,19 +236,21 @@ export default function builder (api, resolvers) {
             // remove...
             commit('CLEAN_UNUSED_ITEMS')
             // clear...
+            commit('SET_LOADING', { cache, value: false })
             delete fetchings[fetchKey]
             return ids.map(id => state.items[id])
           })
           .catch(e => {
             console.error(e)
             // clear...
+            commit('SET_LOADING', { cache, value: false })
             delete fetchings[fetchKey]
             // re-throw
             throw e
           })
         return fetchings[fetchKey]
       },
-      FIND ({ state, commit }, { id, params, cache, refresh }) {
+      FIND ({ state, commit }, { cache, id, params, refresh }) {
         cache = cache || 'CURRENT'
         let paramSerialized = serialize(params)
 
@@ -259,6 +275,7 @@ export default function builder (api, resolvers) {
         }
 
         // request...
+        commit('SET_FINDING', { cache, value: true })
         fetchings[fetchKey] = http.find(id, params)
           .then(response => {
             // set
@@ -269,12 +286,14 @@ export default function builder (api, resolvers) {
             // remove...
             commit('CLEAN_UNUSED_ITEMS')
             // clear...
+            commit('SET_FINDING', { cache, value: false })
             delete fetchings[fetchKey]
             return item
           })
           .catch(e => {
             console.error(e)
             // clear...
+            commit('SET_FINDING', { cache, value: false })
             delete fetchings[fetchKey]
             // re-throw
             throw e
@@ -283,6 +302,7 @@ export default function builder (api, resolvers) {
       },
       CREATE ({ state, commit }, { cache, params, payload }) {
         cache = cache || 'ALL'
+        commit('SET_SUBMITTING', { cache, value: true })
         return http.create(payload, params)
           .then(response => {
             // set
@@ -294,17 +314,39 @@ export default function builder (api, resolvers) {
             if (cached) {
               commit('APPEND_CACHE_ITEM', { cache, id })
             }
+            // clear...
+            commit('SET_SUBMITTING', { cache, value: false })
             return item
           })
+          .catch(e => {
+            console.error(e)
+            // clear...
+            commit('SET_SUBMITTING', { cache, value: false })
+            // re-throw
+            throw e
+          })
       },
-      UPDATE ({ state, commit }, { id, payload, params }) {
+      UPDATE ({ state, commit }, { cache, id, params, payload }) {
+        cache = cache || 'CURRENT'
+        commit('SET_SUBMITTING', { cache, value: true })
         return http.update(id, payload, params)
           .then(item => {
             commit('SET_ITEM', item)
+            // clear...
+            commit('SET_SUBMITTING', { cache, value: false })
             return item
           })
+          .catch(e => {
+            console.error(e)
+            // clear...
+            commit('SET_SUBMITTING', { cache, value: false })
+            // re-throw
+            throw e
+          })
       },
-      DELETE ({ state, commit }, { id, params }) {
+      DELETE ({ state, commit }, { cache, id, params }) {
+        cache = cache || 'CURRENT'
+        commit('SET_SUBMITTING', { cache, value: true })
         return http.destroy(id, params)
           .then(() => {
             commit('DEL_ITEM', id)
@@ -314,13 +356,22 @@ export default function builder (api, resolvers) {
               .forEach(key => {
                 commit('REMOVE_CACHE_ITEM', { cache: key, id })
               })
+            // clear...
+            commit('SET_SUBMITTING', { cache, value: false })
+          })
+          .catch(e => {
+            console.error(e)
+            // clear...
+            commit('SET_SUBMITTING', { cache, value: false })
+            // re-throw
+            throw e
           })
       }
     },
 
     mutations: {
       SET_CACHE (state, { cache, ids, pagination, params }) {
-        Vue.set(state.caches, cache, { cache, ids, pagination, params })
+        Vue.set(state.caches, cache, { ids, pagination, params })
       },
       CLEAN_UNUSED_ITEMS (state) {
         let keeps = Object.keys(state.caches)
@@ -362,6 +413,30 @@ export default function builder (api, resolvers) {
       },
       DEL_ITEM (state, id) {
         Vue.delete(state.items, id)
+      },
+      SET_LOADING (state, { cache, value }) {
+        cache = cache || 'ALL'
+        if (value) {
+          Vue.set(state.loading, cache, true)
+        } else {
+          delete state.loading[cache]
+        }
+      },
+      SET_FINDING (state, { cache, value }) {
+        cache = cache || 'CURRENT'
+        if (value) {
+          Vue.set(state.finding, cache, true)
+        } else {
+          delete state.finding[cache]
+        }
+      },
+      SET_SUBMITTING (state, { cache, value }) {
+        cache = cache || 'CURRENT'
+        if (value) {
+          Vue.set(state.submitting, cache, true)
+        } else {
+          delete state.submitting[cache]
+        }
       }
     },
 
@@ -388,9 +463,18 @@ export default function builder (api, resolvers) {
         cache = cache || 'ALL'
         let cached = state.caches[cache]
         if (!cached) {
-          return null
+          return {}
         }
         return cached.pagination
+      },
+      loading: (state) => (cache) => {
+        return state.submitting[cache]
+      },
+      finding: (state) => (cache) => {
+        return state.finding[cache]
+      },
+      submitting: (state) => (cache) => {
+        return state.submitting[cache]
       }
     }
   }
