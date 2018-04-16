@@ -199,7 +199,8 @@ npm install vuex-cache --save
 2. 有些场景下，列表可能会有许多个，~~列表与与列表之间可能存在交集，~~
 
 > `LOAD`、`LOAD_MORE`、`CREATE`默认的cache是`ALL`  
-> `FIND` 默认是`CURRENT`
+> `FIND` 默认是`CURRENT`  
+> `UPDATE`、`DELETE`会更新所有的cache.ids，但是它们的状态是在 `CURRENT` 下
 
 ```js
   // cache 只是用来区分列表的一个key，只要唯一就可以。可以是字符串也可以是数字，如
