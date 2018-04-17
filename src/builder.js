@@ -15,7 +15,12 @@ const defaultResolvers = {
   id: response => response.id,
   item: response => response,
   items: response => response.data || response,
-  pagination: response => response.data ? { total: response.total, per_page: response.per_page, current_page: response.current_page, last_page: response.last_page } : null
+  pagination: response => ({
+    total: response.total || response.length,
+    per_page: response.per_page || response.length,
+    current_page: response.current_page || 1,
+    last_page: response.last_page || 1
+  })
 }
 
 class Http {
@@ -117,6 +122,11 @@ export default function builder (api, resolvers) {
         */
       },
       loading: {
+        /*
+        ALL: false
+        */
+      },
+      finding: {
         /*
         ALL: false
         */
@@ -465,7 +475,7 @@ export default function builder (api, resolvers) {
         if (!cached) {
           return {}
         }
-        return cached.pagination
+        return cached.pagination || {}
       },
       loading: (state) => (cache) => {
         return state.submitting[cache]
