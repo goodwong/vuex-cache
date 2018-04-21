@@ -51,8 +51,8 @@ npm install vuex-cache --save
   // src/store/order.js
 
   import builder from 'vuex-cache/builder'
-  export default builder('api/client/orders') // 参数是api地址
-  ```
+  export default builder('api/client/orders') // 参数是api地址
+  ```
   
 3. 使用
 
