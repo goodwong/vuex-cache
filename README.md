@@ -183,6 +183,9 @@ npm install vuex-cache --save
   this.$store.dispatch('Order/CREATE', { payload, params: {shop_id: 3} })
   // POST http(s)://your.domain.name/shops/3/orders?with=sale
 
+  // 需要到需插入节点
+  this.$store.dispatch('Order/CREATE', { payload, params: {shop_id: 3}, mode: 'prepend' })
+
   this.$store.dispatch('Order/UPDATE', { id, payload, params: {shop_id: 3} })
   // PUT http(s)://your.domain.name/shops/3/orders/15?with=sale
 
