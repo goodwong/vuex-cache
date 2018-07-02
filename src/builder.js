@@ -16,11 +16,15 @@ const defaultResolvers = {
   item: response => response,
   items: response => response.data || response,
   pagination: response => ({
-    total: response.total || response.length,
-    per_page: response.per_page || response.length,
-    current_page: response.current_page || 1,
-    last_page: response.last_page || 1
+    total: parseInt(response.total) || response.length,
+    per_page: parseInt(response.per_page) || response.length,
+    current_page: parseInt(response.current_page) || 1,
+    last_page: parseInt(response.last_page) || 1
   })
+}
+
+const interceptions = {
+  beforeRequest: null
 }
 
 class Http {
@@ -32,33 +36,40 @@ class Http {
 
   get (params) {
     let api = this._fill(this.api, params)
-    return Vue.http.get(api, { params }).then(r => r.json())
+    return this._request('get', api, { params })
   }
 
   find (id, params) {
     let api = this._fill(this._endpoint(this.api, id), params)
-    return Vue.http.get(api, { params }).then(r => r.json())
+    return this._request('get', api, { params })
   }
 
   create (payload, params) {
     let api = this._fill(this.api, params)
-    return Vue.http.post(api, payload, { params }).then(r => r.json())
+    return this._request('post', api, payload, { params })
   }
 
   update (id, payload, params) {
     let api = this._fill(this._endpoint(this.api, id), params)
-    // return Vue.http.put(api, payload).then(r => r.json())
+    // return Vue.http.put(api, payload)
 
     // fix bug for laravel request parse on PUT
     // see: https://github.com/laravel/framework/issues/13457#issuecomment-239451567
     params = params || {}
     params._method = 'PUT'
-    return Vue.http.post(api, payload, { params }).then(r => r.json())
+    return this._request('post', api, payload, { params })
   }
 
   destroy (id, params) {
     let api = this._fill(this._endpoint(this.api, id), params)
-    return Vue.http.delete(api, { params })
+    return this._request('delete', api, { params })
+  }
+
+  _request (method, ...args) {
+    if (interceptions.beforeRequest) {
+      return new Promise((resolve, reject) => interceptions.beforeRequest(resolve, reject)).then(() => Vue.http[method](...args))
+    }
+    return Vue.http[method](...args).then(r => r.body || r)
   }
 
   /**
@@ -90,7 +101,7 @@ class Http {
   }
 }
 
-export default function builder (api, resolvers) {
+export function vuexResourceBuilder (api, resolvers) {
   // http 请求类
   const http = new Http(api)
 
@@ -139,10 +150,7 @@ export default function builder (api, resolvers) {
     },
 
     actions: {
-      LOAD ({ state, commit }, payload) {
-        payload = payload || {}
-        let { cache, params, refresh } = payload
-        cache = cache || 'ALL'
+      LOAD ({ state, commit }, { cache = 'ALL', params, refresh } = {}) {
         let paramSerialized = serialize(params)
 
         /**
@@ -205,10 +213,7 @@ export default function builder (api, resolvers) {
           })
         return fetchings[fetchKey]
       },
-      LOAD_MORE ({ state, commit }, payload) {
-        payload = payload || {}
-        let { cache, params, refresh } = payload
-        cache = cache || 'ALL'
+      LOAD_MORE ({ state, commit }, { cache = 'ALL', params, refresh } = {}) {
         let paramSerialized = serialize(params)
 
         // cache
@@ -260,8 +265,7 @@ export default function builder (api, resolvers) {
           })
         return fetchings[fetchKey]
       },
-      FIND ({ state, commit }, { cache, id, params, refresh }) {
-        cache = cache || 'CURRENT'
+      FIND ({ state, commit }, { cache = 'CURRENT', id, params, refresh }) {
         let paramSerialized = serialize(params)
 
         // cached
@@ -310,8 +314,7 @@ export default function builder (api, resolvers) {
           })
         return fetchings[fetchKey]
       },
-      CREATE ({ state, commit }, { cache, params, payload }) {
-        cache = cache || 'ALL'
+      CREATE ({ state, commit }, { cache = 'ALL', params, payload, mode = 'append' }) {
         commit('SET_SUBMITTING', { cache, value: true })
         return http.create(payload, params)
           .then(response => {
@@ -322,7 +325,11 @@ export default function builder (api, resolvers) {
             // cache
             let cached = state.caches[cache]
             if (cached) {
-              commit('APPEND_CACHE_ITEM', { cache, id })
+              if (mode === 'append') {
+                commit('APPEND_CACHE_ITEM', { cache, id })
+              } else if (mode === 'prepend') {
+                commit('PREPPEND_CACHE_ITEM', { cache, id })
+              }
             }
             // clear...
             commit('SET_SUBMITTING', { cache, value: false })
@@ -336,8 +343,7 @@ export default function builder (api, resolvers) {
             throw e
           })
       },
-      UPDATE ({ state, commit }, { cache, id, params, payload }) {
-        cache = cache || 'CURRENT'
+      UPDATE ({ commit }, { cache = 'CURRENT', id, params, payload }) {
         commit('SET_SUBMITTING', { cache, value: true })
         return http.update(id, payload, params)
           .then(item => {
@@ -354,8 +360,7 @@ export default function builder (api, resolvers) {
             throw e
           })
       },
-      DELETE ({ state, commit }, { cache, id, params }) {
-        cache = cache || 'CURRENT'
+      DELETE ({ state, commit }, { cache = 'CURRENT', id, params }) {
         commit('SET_SUBMITTING', { cache, value: true })
         return http.destroy(id, params)
           .then(() => {
@@ -393,6 +398,9 @@ export default function builder (api, resolvers) {
             Vue.delete(state.items, id)
           }
         })
+      },
+      PREPPEND_CACHE_ITEM (state, { cache, id }) {
+        state.caches[cache] && state.caches[cache].ids.unshift(id)
       },
       APPEND_CACHE_ITEM (state, { cache, id }) {
         state.caches[cache] && state.caches[cache].ids.push(id)
@@ -447,6 +455,13 @@ export default function builder (api, resolvers) {
         } else {
           delete state.submitting[cache]
         }
+      },
+      FLUSH (state) {
+        Vue.set(state, 'items', {})
+        Vue.set(state, 'caches', {})
+        Vue.set(state, 'loading', {})
+        Vue.set(state, 'finding', {})
+        Vue.set(state, 'submitting', {})
       }
     },
 
@@ -494,5 +509,14 @@ export default function builder (api, resolvers) {
       return null
     }
     return Object.keys(params).sort().map(key => `${key}=${params[key]}`).join('&')
+  }
+}
+
+export default {
+  install (Vue, options = {}) {
+    Vue.vuexResourceBuilder = vuexResourceBuilder
+    if (options.beforeRequest) {
+      interceptions.beforeRequest = options.beforeRequest
+    }
   }
 }
