@@ -245,7 +245,8 @@ export function vuexResourceBuilder (api, resolvers) {
             if (cached) {
               ids = cached.ids.concat(ids)
             }
-            ids = [...new Set(ids)] // unique
+            // # ids = [...new Set(ids)] // unique (IE11 不支持，只好用下面方法)
+            ids = ids.filter((value, index, self) => self.indexOf(value) === index) // unique
             let pagination = resolvers.pagination(response)
             commit('SET_CACHE', { cache, ids, pagination, params: paramSerialized })
             // remove...
